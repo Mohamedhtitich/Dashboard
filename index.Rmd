@@ -1,0 +1,1971 @@
+---
+title : "Sustainability Dashboard"
+output:
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+    theme:
+      version: 5
+      bg: "#ffffff"
+      fg: "#198286"
+      primary: "#c8dedc"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, library(haven),library(dplyr),library(tidyr),library(readxl),library(ggplot2),library(tidyverse),library(plotly),library(gghighlight),library(crosstalk),library(flexdashboard),library(htmltools),library(shiny),require(shinydashboard))
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+
+df1<- read_rds("data_for_plots2.rds") %>%
+  filter(score_spi != "NA" & !any(ghgs_percapita == "NA") & (region != "NA" | spicountrycode == "WWW" | spicountrycode == "EU27")) %>%
+  left_join(read_dta("EU27.dta"),
+            by =c("spicountrycode", "country", "spiyear"))
+
+OECD<-c("Austria","Belgium","Canada","Denmark","France","Germany",
+    "Greece","Iceland","Ireland","Italy","Luxembourg","Netherlands",
+    "Norway","Portugal","Spain","Sweden","Switzerland","Turkey",
+    "United Kingdom","United States of America") 
+  
+g20<-c("Argentina", "Australia", "Brazil", "Canada", "China", "France", "Germany", "India",
+    "Indonesia", "Italy", "Japan", "Republic of Korea", "Mexico", "Russia", "Saudi Arabia", 
+    "South Africa","Turkey", "United Kingdom", "United States of America","Austria", "Belgium", 
+    "Bulgaria", "Croatia", "Cyprus", "Czech Republic", "Denmark", "Estonia", "Finland", "Greece",
+    "Hungary", "Ireland", "Italy", "Latvia", "Lithuania", "Luxembourg", "Malta",
+    "Netherlands", "Poland", "Portugal", "Romania", "Slovakia", "Slovenia", "Spain", "Sweden")
+  
+
+g7<-c("Canada", "France", "Germany", "Italy", "Japan", "United Kingdom", "United States")
+  
+brics<- c("Brazil", "Russia", "India", "China", "South Africa")
+  
+  
+df1<- df1 %>%
+    mutate(OECD = case_when(any(country == OECD) ~ "OECD"))%>%
+    mutate(G20 = case_when(any(country == g20) ~ "G20"))%>%
+    mutate(G7 = case_when(any(country == g7) ~ "G7"))%>%
+    mutate(BRICS = case_when(any(country == brics) ~ "BRICS"))
+
+
+df1<- df1 %>%
+  group_by(country) %>%
+    mutate(ghgs_percapita_change= ((ghgs_percapita - ghgs_percapita[spiyear==2011]) / ghgs_percapita[spiyear==2011])*100,
+    GDPpc_change= ((GDPpc - GDPpc[spiyear==2011]) / GDPpc[spiyear==2011])*100,
+    score_spi_diff= (score_spi - score_spi[spiyear==2011]))
+```
+
+
+SPI, GDP and GHG emissions {.storyboard}
+=====================================
+
+
+### **Social Progress Index and Greenhouse Gas Emissions per capita**
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sd <- highlight_key(subset(df1, GDPpc != "NA") , ~country)
+
+g1<-ggplot(sd,
+          aes(x = score_spi  , y = ghgs_percapita, frame= spiyear)) +
+  geom_jitter(aes(size= population, ids= country),
+              color="black",
+              shape = 21,
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population, ids= country, color = score_spi , text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x , digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "SPI score",
+       size= "GDP per capita",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+highlight(ggplotly(g1,  tooltip = "text"),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.1) %>% 
+  animation_opts(
+    1500, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(
+    label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "YEAR ", font = list(color="black"))
+  )%>%
+  config(displayModeBar = FALSE)
+```
+
+
+*** 
+
+**The graph shows the relationship between the Social Progress Index (SPI) scores and per capita GHGs.**
+
+- Animate the graphic to see the trajectory of countries over time. 
+
+- It is possible to highlight multiple countries by clicking on their respective dots. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal dashed line represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org)
+
+### **Gross Domestic Product per capita and Greenhouse Gas Emissions per capita**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+g2<-ggplot(sd,
+          aes(x = GDPpc  , y = ghgs_percapita, frame= spiyear)) +
+  geom_jitter(aes(size= population, ids = country),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population,ids= country ,color = ghgs_percapita , text = sprintf(
+    "<b>%s<br></b>\n<br>Population : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("GDP per capita (logarithmic scale)") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x/1000 , digits = 2), 'K')
+    }
+  ) +
+  labs(title = "" ,
+       color = "GHGs Emissions",
+       size= "GDP per capita",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "lightblue4", high = "darkorange")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+highlight(ggplotly(g2,  tooltip = "text"),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.1) %>% 
+  animation_opts(
+    1000, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "YEAR ", font = list(color="black"))
+  )%>%
+  config(displayModeBar = FALSE)
+
+
+```
+
+*** 
+
+**The graph shows the relationship between gross domestic product per capita and per capita GHGs.**
+
+- Animate the graphic to see the trajectory of countries over time.
+
+- It is possible to highlight multiple countries by clicking on them. Double (on empty spots) click to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal dashed line represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org)
+
+
+Country groups  {.storyboard}
+=========================================
+
+
+### **SPI tier 1 countries**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+df1_tier1<- df1 %>%
+  filter(tiers2011 == "SPI tier 1")
+sd__tier1 <- highlight_key(df1_tier1, ~country)
+
+g1<-ggplot(sd__tier1,
+           aes(x = score_spi  , y = ghgs_percapita, frame= spiyear)) +
+  geom_jitter(aes(size= population, ids = country),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(data= df1%>% filter(tiers2011 != "SPI tier 1"& score_spi != "NA" & ghgs_percapita != "NA"), mapping = aes(x= score_spi, y = ghgs_percapita,size= population,ids= country ,color = score_spi), alpha=0)+
+  geom_point(aes(size= population,ids= country ,color = score_spi , text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x, digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "SPI score",
+       size= "GDP per capita",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+highlight(hide_legend(ggplotly(g1,  tooltip = "text")),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.1) %>% 
+  animation_opts(
+    1000, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(
+    label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "YEAR ", font = list(color="black"))
+  )%>%
+  config(displayModeBar = FALSE)
+```
+
+*** 
+
+
+**The graph shows the relationship between SPI tier 1 countries scores and per capita GHGs.**
+
+- SPI tier 1 countries achieve  the highest SPI score.
+
+- Animate the graphic to see the trajectory of countries over time.
+
+- It is possible to highlight multiple countries by clicking on them. Double (on empty spots) click to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal line dashed represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org)
+
+
+
+### **SPI tier 6 countries**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+df1_tier6<- df1 %>%
+  filter(tiers2011 == "SPI tier 6")
+sd__tier6 <- highlight_key(df1_tier6, ~country)
+
+g1<-ggplot(sd__tier6,
+           aes(x = score_spi  , y = ghgs_percapita, frame= spiyear)) +
+  geom_jitter(aes(size= population, ids = country),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+    geom_point(data= df1%>% filter(tiers2011 != "SPI tier 6"& score_spi != "NA" & ghgs_percapita != "NA"), mapping = aes(x= score_spi, y = ghgs_percapita,size= population,ids= country ,color = score_spi), alpha=0)+
+  geom_point(aes(size= population,ids= country ,color = score_spi , text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x, digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "SPI score",
+       size= "GDP per capita",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+highlight(hide_legend(ggplotly(g1,  tooltip = "text")),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.1) %>% 
+  animation_opts(
+    2000, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(
+    label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "YEAR ", font = list(color="black"))
+  )%>%
+  config(displayModeBar = FALSE)
+```
+
+*** 
+
+**The graph shows the relationship between SPI tier 6 countries scores and per capita GHGs.**
+
+- SPI tier 6 countries achieve  the lowest SPI score.
+
+- Animate the graphic to see the trajectory of countries over time.
+
+- It is possible to highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal line dashed represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org)
+
+
+### **G7 countries**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+df1_G7<- df1 %>%
+  filter(G7 == "G7")
+sd__G7 <- highlight_key(df1_G7, ~country)
+
+g1<-ggplot(sd__G7,
+           aes(x = score_spi  , y = ghgs_percapita, frame= spiyear)) +
+  geom_jitter(aes(size= population, ids = country),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+    geom_point(data= df1%>% filter(tiers2011 != "G7"& score_spi != "NA" & ghgs_percapita != "NA"), mapping = aes(x= score_spi, y = ghgs_percapita,size= population,ids= country ,color = score_spi), alpha=0)+
+  geom_point(aes(size= population,ids= country ,color = score_spi , text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x, digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "SPI score",
+       size= "GDP per capita",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+highlight(hide_legend(ggplotly(g1,  tooltip = "text")),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.1) %>% 
+  animation_opts(
+    1000, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(
+    label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "YEAR ", font = list(color="black"))
+  )%>%
+  config(displayModeBar = FALSE)
+```
+
+*** 
+
+**The graph shows the relationship between G7 countries SPI score and per capita GHGs.**
+
+- The G7 countries are Canada, France, Germany, Italy, Japan, the United Kingdom and the United States.
+
+- Animate the graphic to see the trajectory of the G7 countries over time.
+
+- It is possible to highlight multiple countries by clicking on them.
+
+- Double click (on empty spots) to unselect/select all. Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal line dashed represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org)
+
+
+### **Top emerging markets (BRICS)** 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+df1_BRICS<- df1 %>%
+  filter(BRICS == "BRICS")
+sd__BRICS <- highlight_key(df1_BRICS, ~country)
+
+g1<-ggplot(sd__BRICS,
+           aes(x = score_spi  , y = ghgs_percapita, frame= spiyear)) +
+  geom_jitter(aes(size= population, ids = country),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+    geom_point(data= df1%>% filter(tiers2011 != "BRICS" & score_spi != "NA" & ghgs_percapita != "NA"), mapping = aes(x= score_spi, y = ghgs_percapita,size= population,ids= country ,color = score_spi), alpha=0)+
+  geom_point(aes(size= population,ids= country ,color = score_spi , text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x, digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "SPI score",
+       size= "GDP per capita",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+highlight(hide_legend(ggplotly(g1,  tooltip = "text")),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.1) %>% 
+  animation_opts(
+    1000, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(
+    label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "YEAR ", font = list(color="black"))
+  )%>%
+  config(displayModeBar = FALSE)
+```
+
+***
+
+**The graph shows the relationship between top emerging economies  SPI score and per capita GHGs.**
+
+- The BRICS countries are Brazil, Russia, India, China and South Africa.
+
+- Animate the graphic to see the trajectory of the BRICS countries over time.
+
+- It is possible to highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal line dashed represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org)
+
+
+Average trends  {.storyboard}
+=========================================
+
+### **Evolution of the SPI-GHGs relationship per SPI tier**
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+g1<-df1%>% 
+  filter(tiers2011 != "NA")%>%
+  ggplot(aes(x = score_spi  , y = ghgs_percapita, frame= spiyear, color = tiers2011)) +
+  geom_jitter(aes(size= population, ids = country),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population,ids= country ,color = score_spi , text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_smooth(method = "lm", se= FALSE, color= "darkgrey", alpha= .8, size = 2)+
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    labels = function(x) {
+      round(x, digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "GHGs Emissions",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,8),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot")+ 
+  facet_grid(. ~factor(tiers2011, levels = c("SPI tier 6",
+                                         "SPI tier 5",
+                                         "SPI tier 4",
+                                         "SPI tier 3",
+                                         "SPI tier 2",
+                                         "SPI tier 1")),
+             scales = "free")
+
+
+
+
+ggplotly(g1,  tooltip = "text") %>%
+  config(displayModeBar = FALSE) %>% 
+  animation_opts(
+    1000, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(
+    label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "YEAR ", font = list(color="black"))
+  )
+```
+
+*** 
+
+**The graphs show the relationship between SPI scores and per capita greenhouse gas emissions for each of the six performance tiers of the Social Progress Index. The tiers are defined based on the 2011 SPI scores.**
+
+- The grey lines represent average trends of associations between GHG emissions and SPI scores for each SPI tier.
+
+- Animate the graphic to see the change of the relationships between SPI scores and GHG emissions over time in each SPI tier.
+
+- It is possible to highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal line dashed represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org).
+
+
+Selected countries {.storyboard}
+=====================================  
+
+
+### **Top emission decrease** : More than 20% decrease in GHGs Emissions per capita in 2021
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+ss<-df1 %>% group_by(country) %>% 
+  filter(tiers2011 != "NA" &
+           any(OECD == "OECD" |
+               G20 == "G20" |
+               G7 == "G7" |
+               BRICS == "BRICS"|
+               spicountrycode == c("SWE","CHL","CRI",
+                                   "GHA","RWA","COD",
+                                   "MDG", "AGO", "SDN",
+                                   "HTI", "PNG", "TZA",
+                                   "NPL","THA", "MYS") |
+               population >= 100*(10^6)))
+
+g<-ggplot(ss, aes(spiyear, ghgs_percapita_change, color = country)) +
+  geom_line(size= 3, alpha= .5) +
+    geom_jitter(size= 5, data = ss %>% filter(spiyear == 2021),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(size= 5, alpha= .8,  data = ss %>% filter(spiyear == 2021))+
+  geom_point(size= 3, color="darkgrey",
+             mapping = aes(x = 2011, y= 0))+
+  gghighlight(
+    ghgs_percapita_change[spiyear==2021] < -20  &
+    score_spi_diff [spiyear==2021] > -10,
+    GDPpc_change[spiyear==2021] > -10,
+    use_group_by = TRUE,
+    label_key = country,
+    max_highlight = 100,
+    unhighlighted_params = list(size = 1, colour = "lightgrey", alpha = 0.4),
+    label_params = list(size = 3, alpha = 0),
+    calculate_per_facet = TRUE) +
+  
+  #Adding labels 
+  geom_point(
+    data = ss %>% filter(spiyear == 2021 & 
+                           ghgs_percapita_change < -20 &
+                           score_spi_diff > -10 & 
+                           GDPpc_change > -10 ),  # filter the data for the labels
+    mapping = aes(
+      x = spiyear,
+      y = ghgs_percapita_change,
+      color= spicountrycode,
+      text = sprintf(
+    "<b>%s<br></b>\nGHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2))),
+    size = 5,
+    alpha= 0) +
+  
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020, 2021))+
+  scale_y_continuous(
+    labels = function(y) {
+      paste0(y , '%')
+    }
+  ) +
+  ylab("GHGs Emissions per capita change ") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "Reference year is 2011",
+       color = "",
+       caption = "") +
+  scale_color_hue(l=60, c=50)+
+  theme_minimal() +
+  facet_wrap(.~ tiers2011)+
+  theme(axis.text.x = element_text(angle = 30, size = 9)) #NEW parameter
+
+hide_legend(ggplotly(g, tooltip = "text")) %>%
+  config(displayModeBar = FALSE)%>%
+  layout(hovermode = "x")
+```
+
+***
+
+**The graph shows the change over time in greenhouse gas emissions for selected countries in each tier.**
+
+- The emission performance over time is divided into 4 categories.
+
+- From all selected countries (all grey lines), highlighted are those from each SPI tier that fall into the chosen category of emission performance.
+
+- Reference year is 2011. Tiers are based on the 2011 SPI scores. 
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org).
+
+
+### **Moderate improvers** : 5% to 20% decrease in GHGs Emissions per capita in 2021
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+g<- ggplot(ss,aes(spiyear, ghgs_percapita_change, color = country)) +
+  geom_line(size= 3, alpha= .5) +
+      geom_jitter(size= 5, data = ss %>% filter(spiyear == 2021),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(size= 5, alpha= .7, data = ss %>% filter(spiyear == 2021))+
+  geom_point(size= 3, color="darkgrey",
+             mapping = aes(x = 2011, y= 0))+
+  gghighlight(
+     ghgs_percapita_change[spiyear==2021] > -20 & ghgs_percapita_change[spiyear==2021] <= -5 &
+      score_spi_diff[spiyear==2021] > -10 &
+      GDPpc_change[spiyear==2021] > -10,
+    use_group_by = TRUE,
+    label_key = country,
+    max_highlight = 100,
+    unhighlighted_params = list(size = 1, colour = "lightgrey", alpha = 0.5),
+    label_params = list(size = 3, alpha = 0),
+    calculate_per_facet = TRUE) +
+  
+  #Adding labels 
+  geom_point(
+    data = ss %>% filter(spiyear == 2021 & 
+                           ghgs_percapita_change > -20 &
+                           ghgs_percapita_change <= -5 &
+                           score_spi_diff > -10 & 
+                           GDPpc_change > -10),  # filter the data for the labels
+    mapping = aes(
+      x = spiyear,
+      y = ghgs_percapita_change,
+      color = spicountrycode,
+      text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2))),
+    size = 5,
+    alpha = 0) +
+  
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+  scale_y_continuous(
+                     labels = function(y) {
+                       paste0(y , '%')
+                     }
+  ) +
+  ylab("GHGs Emissions per capita change ") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "Reference year is 2011",
+       color = "",
+       caption = "") +
+  scale_color_hue(l=60, c=50)+
+  theme_minimal() +
+  facet_wrap(.~ tiers2011)+
+  theme(legend.position = "none", axis.text.x = element_text(angle = 30, size = 9))
+
+
+
+ggplotly(g, tooltip = "text")%>%
+  config(displayModeBar = FALSE)%>%
+  layout(hovermode = "x")
+```
+
+***
+
+**The graph shows the change over time in greenhouse gas emissions for selected countries in each tier.**
+
+- The emission performance over time is divided into 4 categories.
+
+- From all selected countries (all grey lines), highlighted are those from each SPI tier that fall into the chosen category of emission performance.
+
+- Reference year is 2011. Tiers are based on the 2011 SPI scores. 
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org).
+
+
+
+### **No significant change**: -5% to +5% change in GHGs Emissions per capita 2021
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+g<-ggplot(ss, aes(spiyear, ghgs_percapita_change, color = country)) +
+  geom_line(size= 3, alpha= .5) +
+      geom_jitter(size= 5, data = ss %>% filter(spiyear == 2021),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(size= 5, alpha= .7, data = ss %>% filter(spiyear == 2021))+
+  geom_point(size= 3, color="darkgrey",
+             mapping = aes(x = 2011, y= 0))+
+  gghighlight(
+    ghgs_percapita_change[spiyear==2021] > -5 & ghgs_percapita_change[spiyear==2021] <= 5  &
+      score_spi_diff[spiyear==2021] > -10 &
+      GDPpc_change[spiyear==2021] > -10,
+    use_group_by = TRUE,
+    label_key = country,
+    max_highlight = 100,
+    unhighlighted_params = list(size = 1, colour = "lightgrey", alpha = 0.4),
+    label_params = list(size = 3, alpha = 0),
+    calculate_per_facet = TRUE) +
+  
+  #Adding labels 
+  geom_point(
+    data = ss %>% filter(spiyear == 2021 & 
+                           ghgs_percapita_change > -5 &
+                           ghgs_percapita_change <= 5 &
+                           score_spi_diff > -10 & 
+                           GDPpc_change > -10),  # filter the data for the labels
+    mapping = aes(
+      x = spiyear,
+      y = ghgs_percapita_change,
+      label = spicountrycode,
+      color = spicountrycode,
+      text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2))),
+    size = 5,
+    alpha= 0) +
+  
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+  scale_y_continuous(
+                     labels = function(y) {
+                       paste0(y , '%')
+                     }
+  ) +
+  ylab("GHGs Emissions per capita change ") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "Reference year is 2011",
+       color = "",
+       caption = "") +
+  scale_color_hue(l=60, c=50)+
+  theme_minimal() +
+  facet_wrap(.~ tiers2011)+
+  theme(axis.text.x = element_text(angle = 30, size = 9)) #NEW parameter 
+
+hide_legend(ggplotly(g, tooltip = "text")%>%
+  config(displayModeBar = FALSE))%>%
+  layout(hovermode = "x")
+```
+
+***
+
+
+**The graph shows the change over time in greenhouse gas emissions for selected countries in each tier**
+
+- The emission performance over time is divided into 4 categories.
+
+- From all selected countries (all grey lines), highlighted are those from each SPI tier that fall into the chosen category of emission performance.
+
+- Reference year is 2011. Tiers are based on the 2011 SPI scores. 
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org)
+
+
+### **Top GHGs emission increase**: 5% and more increase in GHGs Emissions per capita 2021
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+g<-ggplot(ss, aes(spiyear, ghgs_percapita_change, color = spicountrycode)) +
+  geom_line(size= 3, alpha= .5) +
+      geom_jitter(size= 5, data = ss %>% filter(spiyear == 2021),
+              shape = 21,
+              color = "black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(size= 5, alpha= .7, data = ss %>% filter(spiyear == 2021))+
+  geom_point(size= 3, color="darkgrey",
+             mapping = aes(x = 2011, y= 0))+
+  gghighlight(
+    ghgs_percapita_change[spiyear==2021] >= 5 &
+      score_spi_diff[spiyear==2021] > -10 &
+      GDPpc_change[spiyear==2021] > -10,
+    use_group_by = TRUE,
+    label_key = country,
+    max_highlight = 100,
+    unhighlighted_params = list(size = 1, colour = "lightgrey", alpha = 0.4),
+    label_params = list(size = 3, alpha = 0),
+    calculate_per_facet = TRUE) +
+  
+  #Adding labels 
+  geom_point(
+    data = ss %>% filter(spiyear == 2021 & 
+                           ghgs_percapita_change >= 5 &
+                           score_spi_diff > -10 & 
+                           GDPpc_change > -10),  # filter the data for the labels
+   mapping = aes(
+      x = spiyear,
+      y = ghgs_percapita_change,
+      label = spicountrycode,
+      text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2))),
+    size = 5,
+    alpha= 0) +
+  
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+  scale_y_continuous(
+                     labels = function(y) {
+                       paste0(y , '%')
+                     }
+  ) +
+  ylab("GHGs Emissions per capita change ") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "Reference year is 2011",
+       color = "",
+       caption = "") +
+  scale_color_hue(l=60, c=50)+
+  theme_minimal() +
+  facet_wrap(.~ tiers2011)+
+  theme(axis.text.x = element_text(angle = 30, size = 9),legend.position = "top")
+
+
+hide_legend(ggplotly(g, tooltip = "text")%>%
+  config(displayModeBar = FALSE))%>%
+  layout(hovermode = "x") 
+```
+
+***
+
+**The graph shows the change over time in greenhouse gas emissions for selected countries in each tier.**
+
+- The emission performance over time is divided into 4 categories.
+
+- From all selected countries (all grey lines), highlighted are those from each SPI tier that fall into the chosen category of emission performance.
+
+- Reference year is 2011. Tiers are based on the 2011 SPI scores. 
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org).
+
+
+SPI GHGs intensity  {.storyboard}
+=========================================
+
+
+### **Is SPI GHGs intensive ?**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+df2<- df1 %>%
+  group_by(country) %>%
+  mutate(ref_countries = case_when(any(spicountrycode== c("SWE","CRI","ARM","GHA","RWA","MDG","AUS", "USA", "KWT", "QAT", "CMR", "LAO"))~ "Reference",
+                                   !any(spicountrycode== c("SWE","CRI","ARM","GHA","RWA","MDG","AUS", "USA", "KWT", "QAT", "CMR", "LAO"))~ "Not reference"))
+
+sd <- highlight_key(subset(df2, spiyear == 2021) , ~ref_countries)
+
+
+g1<-ggplot(sd,
+           aes(x = score_spi  , y = ghgs_percapita, color = ghg_SPI_intensity)) +
+  geom_jitter(aes(size= population),
+              color= "black",
+              shape = 21,
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population, ids= country, text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>SPI score: %s<br>GDP p.c.: %sK<br>SPI-GHGs intensity: %s",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(score_spi, digits = 2),
+    round(GDPpc/1000, digits = 2),
+    round(ghg_SPI_intensity, digits = 2))),
+    alpha = .7) +
+    geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  geom_smooth(method = "lm", se= T, color= "darkgrey")+
+  
+  geom_text(
+    data = df1 %>% filter(spiyear == 2021 &
+                          any(spicountrycode== c("SWE","CRI","ARM","GHA","RWA","MDG","AUS", "USA", "KWT", "QAT", "CMR", "LAO","WWW"))),  # filter the data for the labels
+    mapping = aes(
+      x = score_spi,
+      y = ghgs_percapita,
+      label = country),
+    color= "black",
+    size = 3,
+    nudge_x = 2) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x , digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "SPI-GHGs intensity",
+       caption = "The vertical dashed line corresponds to the median level of GHGs emissions (4.76t per capita)") +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_color_gradient(low = "darkseagreen4", high = "coral3")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+highlight(ggplotly(g1,  tooltip = "text"),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.2,
+          color = "dodgerblue4")%>%
+  config(displayModeBar = FALSE)
+
+
+```
+
+***
+
+**The graph shows the relationship between SPI scores and per capita greenhouse gas emissions.**
+
+- The grey line represents the linear trend of the relationship, the grey area around the line is the 95% confidence interval of the relationship.
+
+- The coloring of country dots shows the intensity of GHG emissions. We define this intensity as the amount of per capita emissions in tonnes of carbon dioxide (CO2) equivalent, divided by the SPI score.
+
+- Select one of the labelled countries to highlight all the reference countries, i.e. those with the highest and lowest GHG intensity within each SPI tier. Double click (on empty spots) to unselect.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the horizontal line dashed represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org).
+
+
+### **Best hypothetical scenario**: What if all countries had the lowest GHGs-SPI intensity of their peer countries?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+
+df2<- read_rds("sustainability_spi_data_all_years.rds") %>%
+  filter(score_spi != "NA" & ghgs_percapita != "NA" & ghg_SPI_intensity!="NA")
+  
+
+
+##########
+
+sd <- highlight_key(subset(df2, spiyear == 2021) , ~country)
+
+g1<-ggplot(sd,
+           aes(x = score_spi  , y = ghgs_percapita, color = ghgs_percapita, frame = Case)) +
+  geom_jitter(aes(size= population, ids= country),
+              shape = 21,
+              color="black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population, ids= country, text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %st<br>SPI score: %s<br>Saved GHGs emissions: %st",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(score_spi, digits = 2),
+    round(Saved_ghgs_emissions, digits = 2))),
+    alpha= .7) +
+  geom_hline(yintercept= 2 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x , digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       subtitle = "",
+       color = "GHGs emissions",
+       size= "GDP per capita") +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_color_gradient(low = "darkseagreen4",high = "coral")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+highlight(ggplotly(g1,  tooltip = "text"),
+          "plotly_click", 
+          selectize = FALSE,
+          persistent = TRUE,
+          opacityDim = 0.1) %>% 
+  animation_opts(
+    2000, easing = "linear", redraw = FALSE
+  ) %>%
+  animation_button(label = "Animate"
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "", font = list(color="black"))
+  )%>%
+  config(displayModeBar = FALSE)
+
+```
+
+
+***
+
+**The graph shows the actual versus the best case scenario.**
+
+- The best case scenario is a simulation assigning the lowest observed SPI-GHGs intensities to countries in each respective SPI-tier.
+
+- Highlight multiple countries by clicking on them and animate the graph to see the change in their GHG emissions from the actual to the hypothetical situation. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+- The size of the dots corresponds to the size of the population and the dashed horizontal line represents the sustainable level of GHG emissions.
+
+- Production based GHG emissions data provided by Climate Watch (cait.wri.org).
+
+
+### **SPI tier 1 SPI-GHGs intensity**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sd <- highlight_key(subset(df1, tiers2011 == "SPI tier 1" & ghg_SPI_intensity!="NA") , ~country)
+
+
+g<-ggplot(sd, aes(spiyear, ghg_SPI_intensity,group=spicountrycode)) +
+  geom_line(size= 1, color = "dodgerblue4", aes(text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2)))) +
+    geom_point(color = "dodgerblue4",size= 2, data = df1 %>% filter((spiyear == 2021 | spiyear == 2011) & tiers2011 == "SPI tier 1"))+
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+  scale_y_continuous(
+    limits = c(min(df1$ghg_SPI_intensity, na.rm = T),max(df1$ghg_SPI_intensity, na.rm = T)),
+    trans = "log",
+    labels = function(y) {
+                       paste0(round(y, digits = 2)  , 't/SPI unit')
+                     }
+  ) +
+  ylab("SPI-GHGs intensity") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "",
+       color = "",
+       caption = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 9),legend.position = "top")
+
+
+
+base <- plot_ly(sd, color = I("dodgerblue4"), height = 700) %>% 
+  group_by(country)
+
+bar_plot <- base %>%
+  filter(spiyear == 2021)%>%
+  add_markers(
+    x = ~ghg_SPI_intensity,
+    size= 7,
+    y = ~fct_reorder(country, ghg_SPI_intensity, .desc = TRUE), 
+    hoverinfo = 'text',
+          text = "")%>%
+  layout(
+    xaxis = list(title = "SPI-GHGs intensity", fixedrange=TRUE, zeroline=T, range = list(0,max(df1$ghg_SPI_intensity, na.rm = T))),
+    yaxis = list(title = "", fixedrange=TRUE),
+    showlegend = FALSE,
+    hovermode = "y"
+  )
+
+
+bscols(widths =  c(5,7),bar_plot%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE), ggplotly(g, tooltip = "text", height = 700)%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE))
+
+```
+
+> **Note**: Production based GHGs emissions data provided by Climate Watch (cait.wri.org)
+
+***
+
+- **The left side graph shows the ranking of SPI tier 1 countries in ascending order according to their GHG-SPI intensity.**
+
+- **The right side graph shows the evolution in time of GHG-SPI intensity of SPI tier 1 countries.**
+
+- Highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+  
+
+### **SPI tier 2 SPI-GHGs intensity**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sd <- highlight_key(subset(df1, tiers2011 == "SPI tier 2" & ghg_SPI_intensity!="NA") , ~country)
+
+
+g<-ggplot(sd, aes(spiyear, ghg_SPI_intensity,group=spicountrycode)) +
+  geom_line(color = "dodgerblue4", size= 1, aes(text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2)))) +
+    geom_point(color = "dodgerblue4",size= 2, data = df1 %>% filter((spiyear == 2021 | spiyear == 2011) & tiers2011 == "SPI tier 2"))+
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+  scale_y_continuous(
+    limits = c(min(df1$ghg_SPI_intensity, na.rm = T),max(df1$ghg_SPI_intensity, na.rm = T)),
+    trans = "log",
+    labels = function(y) {
+                       paste0(round(y, digits = 2)  , 't/SPI unit')
+                     }
+  ) +
+  ylab("SPI-GHGs intensity") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "",
+       color = "",
+       caption = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 9),legend.position = "top")
+
+
+
+base <- plot_ly(sd, color = I("dodgerblue4"), height = 700) %>% 
+  group_by(country)
+
+bar_plot <- base %>%
+  filter(spiyear == 2021)%>%
+  add_markers(
+    x = ~ghg_SPI_intensity,
+    size= 7,
+    y = ~fct_reorder(country, ghg_SPI_intensity, .desc = TRUE), 
+    hoverinfo = 'text',
+          text = "")%>%
+  layout(
+    xaxis = list(title = "SPI-GHGs intensity", fixedrange=TRUE, zeroline=T, range = list(0,max(df1$ghg_SPI_intensity, na.rm = T))),
+    yaxis = list(title = "", fixedrange=TRUE),
+    showlegend = FALSE,
+    hovermode = "y"
+  )
+
+
+
+bscols(widths =  c(5,7),bar_plot%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE), ggplotly(g, tooltip = "text", height = 700)%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE))
+
+```
+
+> **Note**: Production based GHGs emissions data provided by Climate Watch (cait.wri.org)
+
+***
+
+
+- **The left side graph shows the ranking of SPI tier 2 countries in ascending order according to their GHG-SPI intensity.**
+
+- **The right side graph shows the evolution in time of GHG-SPI intensity of SPI tier 2 countries.**
+
+- Highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+### **SPI tier 3 SPI-GHGs intensity**
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sd <- highlight_key(subset(df1, tiers2011 == "SPI tier 3" & ghg_SPI_intensity!="NA") , ~country)
+
+
+g<-ggplot(sd, aes(spiyear, ghg_SPI_intensity,group=spicountrycode)) +
+  geom_line(color = "dodgerblue4", size= 1, aes(text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2)))) +
+    geom_point(color = "dodgerblue4", size= 2, data = df1 %>% filter((spiyear == 2021 | spiyear == 2011) & tiers2011 == "SPI tier 3"))+
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+  scale_y_continuous(
+    limits = c(min(df1$ghg_SPI_intensity, na.rm = T),max(df1$ghg_SPI_intensity, na.rm = T)),
+    trans = "log",
+    labels = function(y) {
+                       paste0(round(y, digits = 2)  , 't/SPI unit')
+                     }
+  ) +
+  ylab("SPI-GHGs intensity") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "",
+       color = "",
+       caption = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 9),legend.position = "top")
+
+
+
+base <- plot_ly(sd, color = I("dodgerblue4"), height = 700) %>% 
+  group_by(country)
+
+bar_plot <- base %>%
+  filter(spiyear == 2021)%>%
+  add_markers(
+    x = ~ghg_SPI_intensity,
+    size= 7,
+    y = ~fct_reorder(country, ghg_SPI_intensity, .desc = TRUE), 
+    hoverinfo = 'text',
+          text = "")%>%
+  layout(
+    xaxis = list(title = "SPI-GHGs intensity", fixedrange=TRUE, zeroline=T, range = list(0,max(df1$ghg_SPI_intensity, na.rm = T))),
+    yaxis = list(title = "", fixedrange=TRUE),
+    showlegend = FALSE,
+    hovermode = "y"
+  )
+
+
+
+bscols(widths =  c(5,7),bar_plot%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE), ggplotly(g, tooltip = "text", height = 700)%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE))
+```
+
+>  **Note**: Production based GHGs emissions data provided by Climate Watch (cait.wri.org)
+
+***
+
+- **The left side graph shows the ranking of SPI tier 3 countries in ascending order according to their GHG-SPI intensity.**
+
+- **The right side graph shows the evolution in time of GHG-SPI intensity of SPI tier 3 countries.**
+
+- Highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+### **SPI tier 4 SPI-GHGs intensity**
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sd <- highlight_key(subset(df1, tiers2011 == "SPI tier 4" & ghg_SPI_intensity!="NA") , ~country)
+
+
+g<-ggplot(sd, aes(spiyear, ghg_SPI_intensity,group=spicountrycode)) +
+  geom_line(color = "dodgerblue4", size= 1, aes(text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2)))) +
+    geom_point(color = "dodgerblue4", size= 2, data = df1 %>% filter((spiyear == 2021 | spiyear == 2011) & tiers2011 == "SPI tier 4"))+
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+  scale_y_continuous(
+    limits = c(min(df1$ghg_SPI_intensity, na.rm = T),max(df1$ghg_SPI_intensity, na.rm = T)),
+    trans = "log",
+    labels = function(y) {
+                       paste0(round(y, digits = 2)  , 't/SPI unit')
+                     }
+  ) +
+  ylab("SPI-GHGs intensity") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "",
+       color = "",
+       caption = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 9),legend.position = "top")
+
+
+
+base <- plot_ly(sd, color = I("dodgerblue4"), height = 700) %>% 
+  group_by(country)
+
+bar_plot <- base %>%
+  filter(spiyear == 2021)%>%
+  add_markers(
+    x = ~ghg_SPI_intensity,
+    size= 7,
+    y = ~fct_reorder(country, ghg_SPI_intensity, .desc = TRUE), 
+    hoverinfo = 'text',
+          text = "")%>%
+  layout(
+    xaxis = list(title = "SPI-GHGs intensity", fixedrange=TRUE, zeroline=T, range = list(0,max(df1$ghg_SPI_intensity, na.rm = T))),
+    yaxis = list(title = "", fixedrange=TRUE),
+    showlegend = FALSE,
+    hovermode = "y"
+  )
+
+
+
+bscols(widths =  c(5,7),bar_plot%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE), ggplotly(g, tooltip = "text", height = 700)%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE))
+```
+
+>  **Note**: Production based GHGs emissions data provided by Climate Watch (cait.wri.org)
+
+
+***
+
+- **The left side graph shows the ranking of SPI tier 4 countries in ascending order according to their GHG-SPI intensity.**
+
+- **The right side graph shows the evolution in time of GHG-SPI intensity of SPI tier 4 countries.**
+
+- Highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries. 
+
+
+### **SPI tier 5 SPI-GHGs intensity**
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sd <- highlight_key(subset(df1, tiers2011 == "SPI tier 5" & ghg_SPI_intensity!="NA") , ~country)
+
+
+g<-ggplot(sd, aes(spiyear, ghg_SPI_intensity,group=spicountrycode)) +
+  geom_line(color = "dodgerblue4", size= 1, aes(text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2)))) +
+    geom_point(color = "dodgerblue4", size= 2, data = df1 %>% filter((spiyear == 2021 | spiyear == 2011) & tiers2011 == "SPI tier 5"))+
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+scale_y_continuous(
+    limits = c(min(df1$ghg_SPI_intensity, na.rm = T),max(df1$ghg_SPI_intensity, na.rm = T)),
+    trans = "log",
+    labels = function(y) {
+                       paste0(round(y, digits = 2)  , 't/SPI unit')
+                     }
+  ) +
+  ylab("SPI-GHGs intensity") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "",
+       color = "",
+       caption = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 9),legend.position = "top")
+
+
+
+base <- plot_ly(sd, color = I("dodgerblue4"), height = 700) %>% 
+  group_by(country)
+
+bar_plot <- base %>%
+  filter(spiyear == 2021)%>%
+  add_markers(
+    x = ~ghg_SPI_intensity,
+    size= 7,
+    y = ~fct_reorder(country, ghg_SPI_intensity, .desc = TRUE), 
+    hoverinfo = 'text',
+          text = "")%>%
+  layout(
+    xaxis = list(title = "SPI-GHGs intensity", fixedrange=TRUE, zeroline=T, range = list(0,max(df1$ghg_SPI_intensity, na.rm = T))),
+    yaxis = list(title = "", fixedrange=TRUE),
+    showlegend = FALSE,
+    hovermode = "y"
+  )
+
+
+
+bscols(widths =  c(5,7),bar_plot%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE), ggplotly(g, tooltip = "text", height = 700)%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE))
+
+```
+
+>  **Note**: Production based GHGs emissions data provided by Climate Watch (cait.wri.org)
+
+***
+
+- **The left side graph shows the ranking of SPI tier 5 countries in ascending order according to their GHG-SPI intensity.**
+
+- **The right side graph shows the evolution in time of GHG-SPI intensity of SPI tier 5 countries.**
+
+- Highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries.
+
+### **SPI tier 6 SPI-GHGs intensity**
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sd <- highlight_key(subset(df1, tiers2011 == "SPI tier 6" & ghg_SPI_intensity!="NA") , ~country)
+
+
+g<-ggplot(sd, aes(spiyear, ghg_SPI_intensity,group=spicountrycode)) +
+  geom_line(color = "dodgerblue4", size= 1, aes(text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%",
+    country,
+    population,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2)))) +
+    geom_point(color = "dodgerblue4", size= 2, data = df1 %>% filter((spiyear == 2021 | spiyear == 2011) & tiers2011 == "SPI tier 6"))+
+  scale_x_discrete(limits= c(2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021))+
+scale_y_continuous(
+    limits = c(min(df1$ghg_SPI_intensity, na.rm = T),max(df1$ghg_SPI_intensity, na.rm = T)),
+    trans = "log",
+    labels = function(y) {
+                       paste0(round(y, digits = 2)  , 't/SPI unit')
+                     }
+  ) +
+  ylab("SPI-GHGs intensity") +
+  xlab("") +
+  labs(title = "" ,
+       subtitle = "",
+       color = "",
+       caption = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 9),legend.position = "top")
+
+
+
+base <- plot_ly(sd, color = I("dodgerblue4"), height = 700) %>% 
+  group_by(country)
+
+bar_plot <- base %>%
+  filter(spiyear == 2021)%>%
+  add_markers(
+    x = ~ghg_SPI_intensity,
+    size= 7,
+    y = ~fct_reorder(country, ghg_SPI_intensity, .desc = TRUE), 
+    hoverinfo = 'text',
+          text = "")%>%
+  layout(
+    xaxis = list(title = "SPI-GHGs intensity", fixedrange=TRUE, zeroline=T, range = list(0,max(df1$ghg_SPI_intensity, na.rm = T))),
+    yaxis = list(title = "", fixedrange=TRUE),
+    showlegend = FALSE,
+    hovermode = "y"
+  )
+
+
+bscols(widths =  c(5,7),bar_plot%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE), ggplotly(g, tooltip = "text", height = 700)%>%
+  highlight(on = "plotly_click", selectize = FALSE, persistent = TRUE, color = 'firebrick')%>%
+  config(displayModeBar = FALSE))
+
+```
+
+>  **Note**: Production based GHGs emissions data provided by Climate Watch (cait.wri.org)
+
+***
+
+- **The left side graph shows the ranking of SPI tier 6 countries in ascending order according to their GHG-SPI intensity.**
+
+- **The right side graph shows the evolution in time of GHG-SPI intensity of SPI tier 6 countries.**
+
+- Highlight multiple countries by clicking on them. Double click (on empty spots) to unselect/select all.
+
+- Hover the cursor over the dots to get more details about the countries. 
+
+Explore More
+=========================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+
+df<- df1 %>%
+  dplyr::select(-c_consumption_co2, -c_consumption_co2_per_capita, -c_consumption_co2_per_gdp)
+
+owid_co2<- read_rds("owid_co2_data.rds") %>%
+  group_by(country) %>%
+  fill(co2:energy_per_gdp) %>%
+  mutate(spiyear = spiyear +1,
+         spicountrycode = case_when(country == "World" ~ "WWW",
+         TRUE ~ spicountrycode))%>%
+  filter(spiyear >= 2011)
+
+df<- df %>%
+  merge(owid_co2, by = c("country","spicountrycode", "spiyear"), all =TRUE)%>%
+  filter(score_spi !="NA")
+
+df<- df %>%
+  group_by(country) %>%
+    mutate(consumption_co2_per_capita_change = ((consumption_co2_per_capita - consumption_co2_per_capita[spiyear==2011]) / consumption_co2_per_capita[spiyear==2011])*100,
+           ghgs_percapita_performance = case_when(ghgs_percapita_change[spiyear==2021]  < -20  ~ "Less than -20%",
+                                             ghgs_percapita_change[spiyear==2021] > -20 & ghgs_percapita_change[spiyear==2021] <= -5  ~ "-20% to -5%",
+                                             ghgs_percapita_change[spiyear==2021] > -5 & ghgs_percapita_change[spiyear==2021] <= 5  ~ "-5% to +5%",
+                                             ghgs_percapita_change[spiyear==2021] > 5 ~ "More than +5%"),
+           consumption_co2_per_capita_performance = case_when(consumption_co2_per_capita_change[spiyear==2021]  < -20  ~ "Less than -20%",
+                                             consumption_co2_per_capita_change[spiyear==2021] > -20 & consumption_co2_per_capita_change[spiyear==2021] <= -5  ~ "-20% to -5%",
+                                             consumption_co2_per_capita_change[spiyear==2021] > -5 & consumption_co2_per_capita_change[spiyear==2021] <= 5  ~ "-5% to +5%",
+                                             consumption_co2_per_capita_change[spiyear==2021] > 5 ~ "More than +5%"))
+
+df2<-SharedData$new(df)
+
+widgets <- list(
+  filter_select("country", "Select countries", df2 , ~country),
+  filter_select("spiyear", "Select Year" ,df2,  ~as.factor(spiyear), multiple = TRUE),
+  filter_checkbox("G20", "Filter by country groups", df2 , ~G20),
+  filter_checkbox("G7", "", df2 , ~G7),
+  filter_checkbox("BRICS", "", df2 , ~BRICS),
+  filter_slider("ghgs_percapita", "Production based GHG emissions per capita", df2 , ~ ghgs_percapita, 
+                round = TRUE , step = 1, post = "t", width = "100%"),
+  filter_slider("consumption_co2_per_capita", "Consumption based CO2 emissions per capita", df2 , ~ consumption_co2_per_capita, 
+                round = TRUE , step = 1, post = "t", width = "100%"),
+  filter_slider("score_spi", "SPI score", df2 , ~ score_spi, 
+                round = TRUE , step = 1, width = "100%"),
+  filter_slider("GDPpc", "GDP per capita", df2 , ~ GDPpc/1000, 
+                round = TRUE , step = 1, post = "K", width = "100%"),
+  filter_slider("population.x", "Population", df2 , ~ population.x/1000000, 
+                round = TRUE , step = 1, post = "M", width = "100%"),
+  filter_checkbox(
+    "ghgs_percapita_performance", "Production based GHGs emissions change (2011-2021)" ,df2,  ~ factor(ghgs_percapita_performance, levels = c("Less than -20%",
+                                                                                                                            "-20% to -5%",
+                                                                                                                            "-5% to +5%",
+                                                                                                                            "More than +5%")),
+                  inline = TRUE
+                  ),
+  filter_checkbox(
+    "consumption_co2_per_capita_performance", "Consumption based CO2 emissions change (2011-2021)" ,df2,  ~ factor(consumption_co2_per_capita_performance, levels = c("Less than -20%",
+                                                                                                                            "-20% to -5%",
+                                                                                                                            "-5% to +5%",
+                                                                                                                            "More than +5%")),
+                  inline = TRUE
+                  )
+  )
+
+
+g1<-ggplot(df2,
+           aes(x = score_spi  , y = ghgs_percapita, color = score_spi)) +
+    geom_jitter(aes(size= population.x),
+              shape = 21,
+              color="black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population.x, text = sprintf(
+    "<b>%s<br></b>\nYear : %s<br>Population : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    spiyear,
+    population.x,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 3.2 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x , digits = 2)
+    }
+  ) +
+  labs(title = "" ,
+       color = "SPI score",
+       size= "GDP per capita",
+       caption = "") +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    legend.position = "none",
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+
+g2<-ggplot(df2,
+          aes(x = GDPpc  , y = ghgs_percapita, color = ghgs_percapita)) +
+  geom_jitter(aes(size= population.x),
+              shape = 21,
+              color="black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population.x, text = sprintf(
+    "<b>%s<br></b>\nYear : %s<br>Population : %s<br>GHGs emission p. c. : %s<br>GHGs emission change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    spiyear,
+    population.x,
+    round(ghgs_percapita, digits = 2),
+    round(ghgs_percapita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita GHGs emissions (logarithmic scale)") +
+  xlab("GDP per capita (logarithmic scale)") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x/1000 , digits = 2), 'K')
+    }
+  ) +
+  labs(title = "" ,
+       color = "GHGs emission",
+       size= "GDP per capita",
+       caption = "") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "lightblue4", high = "darkorange")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    legend.position = "none",    
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+#############################################################################
+
+
+g3<-ggplot(df2,
+           aes(x = score_spi  , y = consumption_co2_per_capita, color = score_spi)) +
+  geom_jitter(aes(size= population.x),
+              shape = 21,
+              color="black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population.x, text = sprintf(
+    "<b>%s<br></b>\nYear : %s<br>Population : %s<br>Consumption based CO2 emissions p. c. : %s<br>Consumption based CO2 emissions change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    spiyear,
+    population.x,
+    round(consumption_co2_per_capita, digits = 2),
+    round(consumption_co2_per_capita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 3.2 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita CO2 emissions (logarithmic scale)") +
+  xlab("SPI score") +
+  scale_x_continuous(
+    limits = c(25, 100),
+    labels = function(x) {
+      round(x , digits = 2)
+    }
+  ) +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  
+  labs(title = "" ,
+       color = "SPI score",
+       size= "GDP per capita",
+       caption = "") +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
+  scale_color_gradient(low = "darkseagreen2", high = "dodgerblue4")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    legend.position = "none",
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+g4<-ggplot(df2,
+          aes(x = GDPpc  , y = consumption_co2_per_capita , color = consumption_co2_per_capita)) +
+  geom_jitter(aes(size= population.x),
+              shape = 21,
+              color="black",
+              position = position_jitter(width = 0, height = 0)
+  ) +
+  geom_point(aes(size= population.x, text = sprintf(
+    "<b>%s<br></b>\nPopulation : %s<br>Population : %s<br>Consumption based CO2 emissions p. c. : %s<br>Consumption based CO2 emissions change (from 2011): %.2f%%<br>SPI score: %s<br>SPI score diffrence (from 2011): %spt<br>GDP p.c.: %sK<br>GDP change (from 2011): %.2f%%",
+    country,
+    spiyear, 
+    population.x,
+    round(consumption_co2_per_capita, digits = 2),
+    round(consumption_co2_per_capita_change, digits = 2),
+    round(score_spi, digits = 2),
+    round(score_spi_diff, digits = 2) ,
+    round(GDPpc/1000, digits = 2),
+    round(GDPpc_change, digits = 2))),
+    alpha = .7) +
+  geom_hline(yintercept= 1.87 , linetype="dashed", color = "darkgrey", size= 1) +
+  ylab("Per capita CO2 emissions (logarithmic scale)") +
+  xlab("GDP per capita (logarithmic scale)") +
+  scale_y_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x , digits = 2), 't')
+    }
+  ) +
+  scale_x_continuous(
+    trans = "log",
+    labels = function(x) {
+      paste0(round(x/1000 , digits = 2), 'K')
+    }
+  ) +
+  labs(title = "" ,
+       color = "CO2 emissions",
+       size= "GDP per capita",
+       caption = "") +
+  guides(color = guide_colourbar(label = FALSE)) +
+  scale_color_gradient(low = "lightblue4", high = "darkorange")+
+  scale_size(range = c(3,14),guide="none")+
+  theme_minimal()+
+  theme(
+    legend.position = "none",
+    plot.caption = element_text(hjust = 0, face= "italic"), #Default is hjust=1
+    plot.title.position = "plot", #NEW parameter. Apply for subtitle too.
+    plot.caption.position =  "plot") #NEW parameter
+
+
+p1<-hide_legend(ggplotly(g1,  tooltip = "text", width = 1000, height = 800))%>%
+  config(displayModeBar = FALSE)
+
+p2<-ggplotly(g2,  tooltip = "text", width = 1000, height = 800)%>%
+  config(displayModeBar = FALSE)
+
+p3<-ggplotly(g3,  tooltip = "text", width = 1000, height = 800)%>%
+  config(displayModeBar = FALSE)
+
+p4<-ggplotly(g4,  tooltip = "text", width = 1000, height = 800)%>%
+  config(displayModeBar = FALSE)
+
+bscols(
+  widths = c(1,3,8),div(style = css(width="10%")), widgets, bscols(widths = 12,tabBox(width = 12,tabPanel("Production based GHGs", bscols(widths = c(12,12), p1, p2)),tabPanel("Consumption based CO2 emissions",bscols(widths = c(12,12), p3, p4)))))
+
+
+```
+
+> **Note**: It is possible to explore GHG emissions -production based- and CO2 emissions -consumption based- (change tab) by manipulating the widgets on the side. All years are selected by default. **Production based GHG emissions data provided by Climate Watch (cait.wri.org) and CO2 emissions Consumption based data provided by Our World In Data (ourworldindata.org)**
